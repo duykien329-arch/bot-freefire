@@ -8,11 +8,8 @@ from http.server import BaseHTTPRequestHandler, HTTPServer
 API_TOKEN = '8642171960:AAErXWxh_C1HPfvq7l5B-_4z5vPBsCOUMNE'
 bot = telebot.TeleBot(API_TOKEN)
 
-# 2. Điền mã API Key bạn vừa lấy từ email ocr.space vào đây
+# 2. Điền mã API Key bạn lấy từ email ocr.space vào đây
 OCR_SPACE_API_KEY = 'K81435986188957'
-
-# Cấu hình luật tính điểm (Hạng 1 = 12đ, Hạng 2 = 9đ...)
-PLACEMENT_RULES = {1: 12, 2: 9, 3: 8, 4: 7, 5: 6, 6: 5, 7: 4, 8: 3, 9: 2, 10: 1, 11: 1, 12: 0}
 
 @bot.message_handler(commands=['start', 'help'])
 def send_welcome(message):
@@ -20,30 +17,42 @@ def send_welcome(message):
 
 @bot.message_handler(content_types=['photo'])
 def handle_match_photo(message):
-    bot.reply_to(message, "🔍 Đang gửi ảnh lên Cloud OCR để phân tích...")
+    bot.reply_to(message, "🔍 Đang tải ảnh xuống và gửi lên Cloud OCR để phân tích...")
     try:
-        # Lấy URL đường dẫn ảnh trực tiếp từ Telegram
+        # Tải trực tiếp file ảnh về máy chủ Render trước
         file_info = bot.get_file(message.photo[-1].file_id)
-        file_url = f"https://telegram.org{API_TOKEN}/{file_info.file_path}"
+        downloaded_file = bot.download_file(file_info.file_path)
         
-        # Gửi link ảnh sang server OCR Space xử lý từ xa để tiết kiệm RAM
+        image_path = "temp_result.jpg"
+        with open(image_path, 'wb') as f:
+            f.write(downloaded_file)
+            
+        # Gửi file ảnh vật lý lên OCR Space dưới dạng multipart/form-data
         payload = {
-            'url': file_url,
             'apikey': OCR_SPACE_API_KEY,
             'language': 'eng',
             'isOverlayRequired': False
         }
-        response = requests.post('https://ocr.space', data=payload).json()
         
+        with open(image_path, 'rb') as f:
+            files = {'file': f}
+            response = requests.post('https://ocr.space', data=payload, files=files).json()
+            
+        # Xóa file tạm sau khi gửi xong để sạch máy chủ
+        if os.path.exists(image_path):
+            os.remove(image_path)
+            
         if response.get("ParsedResults"):
             parsed_text = response["ParsedResults"][0]["ParsedText"]
-            # Phản hồi lại nội dung chữ quét được để kiểm tra ban đầu
-            bot.reply_to(message, f"📊 Quét thành công! Dữ liệu đọc được:\n\n{parsed_text}")
+            if parsed_text.strip():
+                bot.reply_to(message, f"📊 Quét thành công! Dữ liệu chữ đọc được:\n\n{parsed_text}")
+            else:
+                bot.reply_to(message, "⚠️ AI không tìm thấy chữ nào trong bức ảnh này.")
         else:
-            bot.reply_to(message, "❌ Server OCR không đọc được chữ từ bức ảnh này.")
+            bot.reply_to(message, f"❌ Lỗi từ Server OCR: {response.get('ErrorMessage', ['Không rõ nguyên nhân'])[0]}")
             
     except Exception as e:
-        bot.reply_to(message, f"❌ Có lỗi xảy ra: {str(e)}")
+        bot.reply_to(message, f"❌ Có lỗi nội bộ xảy ra: {str(e)}")
 
 # Máy chủ web mini giữ cổng Port cho Render
 class HealthCheckHandler(BaseHTTPRequestHandler):
