@@ -5,7 +5,7 @@ import threading
 from http.server import BaseHTTPRequestHandler, HTTPServer
 
 # 1. Điền mã Token Telegram của bạn vào đây
-API_TOKEN = '8642171960:AAErXWxh_C1HPfvq7l5B-_4z5vPBsCOUMNE'
+API_TOKEN = '8642171960:AAGZG7DyOnyXan6u_xmWjnQNS4nwavA1aAA'
 bot = telebot.TeleBot(API_TOKEN)
 
 # 2. Điền mã API Key bạn lấy từ email ocr.space vào đây
